@@ -79,9 +79,30 @@ def build_flow(request: Request) -> tuple[Flow, str]:
     """Construct a Google OAuth flow using request context for redirect URI."""
 
     forwarded_host = request.headers.get("x-forwarded-host")
-    if not forwarded_host:
-        raise HTTPException(status_code=400, detail="Missing x-forwarded-host header")
-    redirect_uri = f"https://{forwarded_host}/oauth/callback"
+    host = None
+    if forwarded_host:
+        host = forwarded_host.split(",")[0].strip()
+
+    if not host:
+        hostname = request.url.hostname or ""
+        if not hostname:
+            raise HTTPException(status_code=400, detail="Unable to resolve request host")
+        port = request.url.port
+        if port and port not in {80, 443}:
+            host = f"{hostname}:{port}"
+        else:
+            host = hostname
+
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    if forwarded_proto:
+        scheme = forwarded_proto.split(",")[0].strip() or request.url.scheme
+    else:
+        scheme = request.url.scheme
+
+    if not scheme:
+        scheme = "https"
+
+    redirect_uri = f"{scheme}://{host}/oauth/callback"
     flow = Flow.from_client_config(
         load_client_config(),
         scopes=resolve_scopes(),
