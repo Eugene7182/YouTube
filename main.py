@@ -1,10 +1,28 @@
 # main.py — минимальный FastAPI с веб-OAuth для Render
-import os, json
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse
+import json
+import os
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import Flow
 
 app = FastAPI()
+
+
+@app.get("/auth/whoami")
+def whoami():
+    """Return channel metadata for the current OAuth credentials."""
+
+    try:
+        creds = Credentials(**json.loads(os.environ["YOUTUBE_TOKEN_JSON"]))
+        yt = build("youtube", "v3", credentials=creds)
+        me = yt.channels().list(part="id,snippet,statistics", mine=True).execute()
+        return {"ok": True, "me": me}
+    except Exception as exc:  # pragma: no cover - diagnostic helper
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 
 @app.get("/")
 def root():
@@ -67,7 +85,6 @@ def oauth_callback(request: Request):
     }
     pretty = json.dumps(token_json, ensure_ascii=False, indent=2)
     return f"<h2>Готово ✅ Скопируй JSON в Render → Environment → YOUTUBE_TOKEN_JSON</h2><pre>{pretty}</pre>"
-from fastapi import HTTPException
 import asyncio
 import ideas
 
