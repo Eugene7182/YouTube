@@ -1,0 +1,12 @@
+python-dotenv==1.0.1
+PyYAML==6.0.2
+moviepy==1.0.3
+pydub==0.25.1
+edge-tts==6.1.12
+Pillow==10.4.0
+google-api-python-client==2.141.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+fastapi==0.112.2
+uvicorn==0.30.6
+imageio-ffmpeg==0.5.1

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: yt-shorts-autopipeline
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port 10000"
+    envVars:
+      - key: YOUTUBE_SCOPES
+        value: https://www.googleapis.com/auth/youtube.upload
+      - key: YOUTUBE_TOKEN_JSON
+        sync: false
+      - key: YOUTUBE_CLIENT_SECRET_JSON
+        sync: false

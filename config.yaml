@@ -1,0 +1,11 @@
+voice: "en-US-JennyNeural"   # edge-tts voice
+fps: 30
+resolution: [1080, 1920]     # vertical Shorts
+categoryId: 24               # Entertainment
+privacyStatus: private       # upload drafts
+review_required: true
+shorts_hashtags: ["#shorts", "#cats", "#funny"]
+font: "DejaVuSans.ttf"       # or any installed font on the host
+brand_color: [20, 20, 25]
+accent_color: [255, 255, 255]
+caption_bg: [0, 0, 0, 140]
