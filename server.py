@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import html
+import json
 import os
+from json import JSONDecodeError
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel
 from yaml import YAMLError, safe_load
 
@@ -35,6 +40,56 @@ def ensure_oauth_files() -> None:
         CLIENT_SECRET_PATH.write_text(client_json, encoding="utf-8")
 
 
+def load_client_config() -> dict[str, Any]:
+    """Load OAuth client configuration from environment variables."""
+
+    client_json = os.getenv("YOUTUBE_CLIENT_SECRET_JSON", "").strip()
+    if not client_json:
+        raise HTTPException(status_code=500, detail="YOUTUBE_CLIENT_SECRET_JSON is not configured")
+    try:
+        client_config = json.loads(client_json)
+    except JSONDecodeError as exc:  # pragma: no cover - defensive branch
+        raise HTTPException(status_code=500, detail="Invalid YOUTUBE_CLIENT_SECRET_JSON payload") from exc
+    if not isinstance(client_config, dict):
+        raise HTTPException(status_code=500, detail="YOUTUBE_CLIENT_SECRET_JSON must be a JSON object")
+    return client_config
+
+
+def resolve_scopes() -> list[str]:
+    """Derive OAuth scopes from environment with a sensible default."""
+
+    raw_scopes = os.getenv("YOUTUBE_SCOPES", "https://www.googleapis.com/auth/youtube.upload").strip()
+    if not raw_scopes:
+        raw_scopes = "https://www.googleapis.com/auth/youtube.upload"
+    separators = ",\n\t"
+    scopes: list[str] = []
+    buffer = raw_scopes
+    for sep in separators:
+        buffer = buffer.replace(sep, " ")
+    for scope in buffer.split(" "):
+        normalized = scope.strip()
+        if normalized:
+            scopes.append(normalized)
+    if not scopes:
+        scopes = ["https://www.googleapis.com/auth/youtube.upload"]
+    return scopes
+
+
+def build_flow(request: Request) -> tuple[Flow, str]:
+    """Construct a Google OAuth flow using request context for redirect URI."""
+
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if not forwarded_host:
+        raise HTTPException(status_code=400, detail="Missing x-forwarded-host header")
+    redirect_uri = f"https://{forwarded_host}/oauth/callback"
+    flow = Flow.from_client_config(
+        load_client_config(),
+        scopes=resolve_scopes(),
+        redirect_uri=redirect_uri,
+    )
+    return flow, redirect_uri
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     """Prepare required OAuth files when the application boots."""
@@ -55,6 +110,68 @@ def health() -> dict[str, bool]:
     """Health probe for Render and monitoring systems."""
 
     return {"ok": True}
+
+
+@app.get("/auth/start")
+def auth_start(request: Request) -> RedirectResponse:
+    """Initiate Google OAuth flow for obtaining YouTube upload credentials."""
+
+    flow, _ = build_flow(request)
+    authorization_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+    return RedirectResponse(authorization_url)
+
+
+@app.get("/oauth/callback", response_class=HTMLResponse)
+def oauth_callback(request: Request) -> HTMLResponse:
+    """Exchange the OAuth authorization code and present resulting credentials."""
+
+    code = request.query_params.get("code")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code")
+
+    flow, redirect_uri = build_flow(request)
+    flow.redirect_uri = redirect_uri
+    flow.fetch_token(code=code)
+
+    credentials = flow.credentials
+    token_payload = {
+        "token": credentials.token,
+        "refresh_token": credentials.refresh_token,
+        "token_uri": credentials.token_uri,
+        "client_id": credentials.client_id,
+        "client_secret": credentials.client_secret,
+        "scopes": credentials.scopes,
+    }
+
+    token_json = json.dumps(token_payload, indent=2, ensure_ascii=False)
+    content = f"""
+    <!DOCTYPE html>
+    <html lang=\"en\">
+      <head>
+        <meta charset=\"utf-8\" />
+        <title>YouTube OAuth Token</title>
+        <style>
+          body {{ font-family: sans-serif; max-width: 720px; margin: 2rem auto; line-height: 1.5; }}
+          pre {{ background: #f5f5f5; padding: 1rem; border-radius: 8px; overflow-x: auto; }}
+          code {{ font-family: monospace; }}
+        </style>
+      </head>
+      <body>
+        <h1>OAuth credentials generated</h1>
+        <p>
+          Скопируйте JSON ниже и вставьте его в Render → Environment →
+          <strong>YOUTUBE_TOKEN_JSON</strong>.
+        </p>
+        <pre><code>{html.escape(token_json)}</code></pre>
+        <p>После сохранения переменных перезапустите сервис, чтобы применить токен.</p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=content.strip())
 
 
 @app.post("/run")
