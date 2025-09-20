@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+env/
+# Local config
+.env
+# OAuth secrets/tokens (never commit)
+client_secret*.json
+token.json
+# OS junk
+.DS_Store
