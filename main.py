@@ -67,3 +67,34 @@ def oauth_callback(request: Request):
     }
     pretty = json.dumps(token_json, ensure_ascii=False, indent=2)
     return f"<h2>Готово ✅ Скопируй JSON в Render → Environment → YOUTUBE_TOKEN_JSON</h2><pre>{pretty}</pre>"
+from fastapi import HTTPException
+import asyncio
+import ideas
+
+
+@app.post("/ideas/refresh")
+async def ideas_refresh():
+    try:
+        data = await ideas.refresh_ideas()
+        return {"ok": True, "count": data.get("count", 0)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ideas/sample")
+def ideas_sample(count: int = 3):
+    data = ideas.load_ideas()
+    return {"ok": True, "available": data.get("count", 0), "items": data.get("items", [])[:count]}
+
+
+@app.post("/ideas/pop")
+def ideas_pop(count: int = 1):
+    return {"ok": True, "items": ideas.pop_n(count)}
+
+
+# optional alias to existing pipeline if any:
+@app.post("/trends/refresh")
+async def trends_refresh_alias():
+    # keep backward-compat: call the same refresh
+    data = await ideas.refresh_ideas()
+    return {"ok": True, "count": data.get("count", 0)}
