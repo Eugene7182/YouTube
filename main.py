@@ -9,12 +9,12 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import Flow
 
 from config import settings
-from core.env_compat import OAuthConfigError, ensure_legacy_oauth_env, get_oauth_client_config
+from core.env_compat import OAuthConfigError, ensure_inline_oauth_env, get_oauth_client_config
 from upload_youtube import UploadConfigurationError, get_credentials
 
 app = FastAPI()
 
-ensure_legacy_oauth_env()
+ensure_inline_oauth_env()
 
 
 try:  # noqa: SIM105 - optional dependency
@@ -22,7 +22,7 @@ try:  # noqa: SIM105 - optional dependency
 except Exception:  # pragma: no cover - httpx missing locally is OK
     httpx = None
 
-import ideas
+import ideas  # noqa: E402
 
 
 @app.get("/auth/whoami")

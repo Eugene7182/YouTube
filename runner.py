@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
-import argparse, yaml
+import argparse
+import yaml
 from pathlib import Path
 from generate_script import generate_script
 from tts import synth_sync

@@ -5,9 +5,11 @@ __pycache__/
 env/
 # Local config
 .env
+*.env
+secrets/
 # OAuth secrets/tokens (never commit)
 client_secret*.json
+client_secret.json
 token.json
-config/client_secret.json
 # OS junk
 .DS_Store

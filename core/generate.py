@@ -13,9 +13,11 @@ import yaml
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from build_short import assemble_short, load_font
+from core.settings import get_settings
 from tts import synth_sync
 
-OUTPUT_ROOT = Path("data/output")
+SETTINGS = get_settings()
+OUTPUT_ROOT = Path(os.getenv("OUTPUT_ROOT_DIR", "/tmp/shorts-output"))
 AUDIO_ROOT = OUTPUT_ROOT / "audio"
 VIDEO_ROOT = OUTPUT_ROOT / "video"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
@@ -48,11 +50,7 @@ def _load_config(cfg_path: Path) -> dict[str, Any]:
             if str(tag).strip()
         ]
 
-    env_default_tags = [
-        segment.strip()
-        for segment in os.getenv("DEFAULT_TAGS", "").split(",")
-        if segment.strip()
-    ]
+    env_default_tags = list(SETTINGS.channel_default_tags)
 
     merged_defaults: list[str] = []
     for tag in list(default_tags_cfg) + env_default_tags:
@@ -72,7 +70,7 @@ def _load_config(cfg_path: Path) -> dict[str, Any]:
         uploader = {}
     uploader.setdefault("auto_schedule_if_missing", False)
     uploader.setdefault("time_local", "21:00")
-    uploader.setdefault("timezone", os.getenv("TZ", "Asia/Almaty"))
+    uploader.setdefault("timezone", SETTINGS.tz_target)
     cfg["uploader"] = uploader
 
     return cfg
@@ -275,7 +273,7 @@ def build_all(
     manifest_items: list[dict[str, Any]] = []
 
     uploader_cfg = cfg.get("uploader", {})
-    default_timezone_name = str(uploader_cfg.get("timezone", os.getenv("TZ", "Asia/Almaty")))
+    default_timezone_name = str(uploader_cfg.get("timezone", SETTINGS.tz_target))
     default_timezone: ZoneInfo | None = None
     auto_enabled = bool(uploader_cfg.get("auto_schedule_if_missing"))
     auto_time = _parse_time_local(str(uploader_cfg.get("time_local", "21:00"))) if auto_enabled else None

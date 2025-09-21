@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -12,7 +13,27 @@ from starlette.requests import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server import build_flow
+_DEFAULT_CLIENT = {
+    "installed": {
+        "client_id": "test-client",
+        "client_secret": "test-secret",
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "redirect_uris": ["http://localhost"],
+    }
+}
+
+_DEFAULT_TOKEN = {
+    "refresh_token": "test-refresh",
+    "client_id": "test-client",
+    "client_secret": "test-secret",
+    "token_uri": "https://oauth2.googleapis.com/token",
+}
+
+os.environ.setdefault("YOUTUBE_CLIENT_SECRET_JSON", json.dumps(_DEFAULT_CLIENT))
+os.environ.setdefault("YOUTUBE_TOKEN_JSON", json.dumps(_DEFAULT_TOKEN))
+
+from server import build_flow  # noqa: E402
 
 
 def make_request(url: str, headers: Mapping[str, str] | None = None) -> Request:

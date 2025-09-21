@@ -1,17 +1,22 @@
-"""Upload orchestrator for generated Shorts."""
+"""Upload orchestrator for generated Shorts with validation."""
 
 from __future__ import annotations
 
 import json
-import os
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 import yaml
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from core.metadata import inspect_video, normalize_metadata, validate_video
+from core.settings import get_settings
 from upload_youtube import upload_video
+
+logger = logging.getLogger(__name__)
+SETTINGS = get_settings()
 
 
 def _load_manifest(manifest_path: Path) -> list[dict[str, Any]]:
@@ -50,7 +55,7 @@ def _merge_tags(*tag_sources: Iterable[str]) -> list[str]:
 
 def _load_timezone_from_settings(settings: dict[str, Any]) -> ZoneInfo:
     uploader_cfg = settings.get("uploader") if isinstance(settings.get("uploader"), dict) else {}
-    tz_name = str(uploader_cfg.get("timezone") or os.getenv("TZ", "Asia/Almaty"))
+    tz_name = str(uploader_cfg.get("timezone") or SETTINGS.tz_target)
     try:
         return ZoneInfo(tz_name)
     except ZoneInfoNotFoundError as exc:
@@ -80,13 +85,33 @@ def _default_tags_from_settings(settings: dict[str, Any]) -> list[str]:
             for tag in settings.get("shorts_hashtags", [])
             if str(tag).strip()
         ]
+    return _merge_tags(defaults, SETTINGS.channel_default_tags)
 
-    env_tags = [
-        segment.strip()
-        for segment in os.getenv("DEFAULT_TAGS", "").split(",")
-        if segment.strip()
-    ]
-    return _merge_tags(defaults, env_tags)
+
+def _ensure_future_publish_at(publish_at: datetime | None, *, min_delta_minutes: int = 60) -> datetime | None:
+    if publish_at is None:
+        return None
+    now = datetime.now(timezone.utc)
+    minimum = now + timedelta(minutes=min_delta_minutes)
+    if publish_at < minimum:
+        logger.info(
+            "Adjusting publishAt to respect 60-minute safety window",
+            extra={"original": publish_at.isoformat(), "adjusted": minimum.isoformat()},
+        )
+        return minimum
+    return publish_at
+
+
+def _cleanup_artifacts(entry: dict[str, Any]) -> None:
+    for key in ("video_path", "audio_path"):
+        value = entry.get(key)
+        if not value:
+            continue
+        path = Path(value)
+        try:
+            path.unlink(missing_ok=True)
+        except Exception:  # pragma: no cover - best effort cleanup
+            logger.warning("Failed to remove artefact", extra={"path": path.as_posix()})
 
 
 def upload_manifest(manifest_path: str, settings_path: str) -> list[dict[str, str]]:
@@ -101,32 +126,48 @@ def upload_manifest(manifest_path: str, settings_path: str) -> list[dict[str, st
     if not items:
         return []
 
-    category_id = str(settings.get("categoryId", "24"))
-    privacy_status_default = str(settings.get("privacyStatus", "private"))
+    category_id = str(settings.get("categoryId", SETTINGS.default_category_id))
+    privacy_status_default = str(settings.get("privacyStatus", SETTINGS.default_privacy))
     default_tags = _default_tags_from_settings(settings)
 
-    uploads: list[dict[str, str]] = []
+    results: list[dict[str, str]] = []
     for entry in items:
-        description = entry.get("description", "")
-        tags = _merge_tags(entry.get("tags", []), default_tags)
-        schedule_utc = _parse_schedule(entry.get("schedule"), settings)
-        privacy_status = privacy_status_default
-        publish_at = None
-        if schedule_utc is not None:
-            publish_at = schedule_utc
-            privacy_status = "private"
-        response = upload_video(
-            entry["video_path"],
-            entry["title"],
-            description,
-            tags,
-            category_id=category_id,
-            privacy_status=privacy_status,
-            publish_at=publish_at,
-        )
-        uploads.append(response)
+        video_path = Path(entry["video_path"])
+        try:
+            combined_tags = _merge_tags(entry.get("tags", []), default_tags)
+            metadata = normalize_metadata(entry["title"], entry.get("description", ""), combined_tags)
+            video_info = inspect_video(video_path)
+            validate_video(video_info)
+            schedule_utc = _parse_schedule(entry.get("schedule"), settings)
+            publish_at = _ensure_future_publish_at(schedule_utc)
+            privacy_status = privacy_status_default
+            if publish_at is not None:
+                privacy_status = "private"
+            response = upload_video(
+                video_path,
+                metadata.title,
+                metadata.description,
+                metadata.tags,
+                category_id=category_id,
+                privacy_status=privacy_status,
+                publish_at=publish_at,
+            )
+            response.setdefault("title", metadata.title)
+            results.append(response)
+        except Exception as exc:
+            logger.error(
+                "Upload skipped due to validation error",
+                extra={"title": entry.get("title"), "error": str(exc)},
+            )
+            results.append({
+                "title": str(entry.get("title", "")),
+                "status": "failed",
+                "reason": str(exc),
+            })
+        finally:
+            _cleanup_artifacts(entry)
 
-    return uploads
+    return results
 
 
 __all__ = ["upload_manifest"]

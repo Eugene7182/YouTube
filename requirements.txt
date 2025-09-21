@@ -8,3 +8,5 @@ google-auth-oauthlib
 PyYAML
 python-dotenv
 Pillow
+requests
+pytest
