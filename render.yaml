@@ -1,32 +1,133 @@
 services:
   - type: web
-    name: shorts-bot-pro
+    name: shorts-api
     env: python
-    runtime: python3
-    pythonVersion: 3.11.0
     plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port 10000
+    autoDeploy: true
     envVars:
-      - key: ADMIN_TOKEN
+      - key: YOUTUBE_CLIENT_SECRET_JSON
         sync: false
-      - key: TZ
-        value: Asia/Almaty
+      - key: YOUTUBE_TOKEN_JSON
+        sync: false
       - key: YOUTUBE_API_KEY
         sync: false
-      - key: YOUTUBE_REGION
-        value: US
-      - key: YT_SEARCH_QUERIES
+      - key: CHANNEL_DEFAULT_TAGS
+        value: "shorts,cartoon,comedy"
+      - key: DEFAULT_CATEGORY_ID
+        value: "1"
+      - key: DEFAULT_PRIVACY
+        value: private
+      - key: TZ_TARGET
+        value: America/New_York
+      - key: TZ_LOCAL
+        value: Asia/Almaty
+      - key: RENDER_DEPLOY
+        value: "1"
+      - key: ADMIN_TOKEN
         sync: false
-      - key: IDEAS_PER_REFRESH
-        value: "50"
-      - key: YT_CLIENT_ID
+      - key: SERVICE_BASE_URL
         sync: false
-      - key: YT_CLIENT_SECRET
+      - key: YOUTUBE_DRY_RUN
+        value: "0"
+cronJobs:
+  - name: daily-run-queue
+    type: cron
+    env: python
+    plan: free
+    schedule: "0 13 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m tasks.run_queue --upload
+    autoDeploy: true
+    envVars:
+      - key: YOUTUBE_CLIENT_SECRET_JSON
         sync: false
-      - key: YT_REFRESH_TOKEN
+      - key: YOUTUBE_TOKEN_JSON
         sync: false
-      - key: DEFAULT_TAGS
+      - key: YOUTUBE_API_KEY
         sync: false
-      - key: GOOGLE_TOKEN_URI
-        value: https://oauth2.googleapis.com/token
+      - key: CHANNEL_DEFAULT_TAGS
+        value: "shorts,cartoon,comedy"
+      - key: DEFAULT_CATEGORY_ID
+        value: "1"
+      - key: DEFAULT_PRIVACY
+        value: private
+      - key: TZ_TARGET
+        value: America/New_York
+      - key: TZ_LOCAL
+        value: Asia/Almaty
+      - key: RENDER_DEPLOY
+        value: "1"
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: SERVICE_BASE_URL
+        sync: false
+      - key: YOUTUBE_DRY_RUN
+        value: "0"
+  - name: daily-fetch-trends
+    type: cron
+    env: python
+    plan: free
+    schedule: "0 12 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m tasks.fetch_trending_shorts
+    autoDeploy: true
+    envVars:
+      - key: YOUTUBE_CLIENT_SECRET_JSON
+        sync: false
+      - key: YOUTUBE_TOKEN_JSON
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: CHANNEL_DEFAULT_TAGS
+        value: "shorts,cartoon,comedy"
+      - key: DEFAULT_CATEGORY_ID
+        value: "1"
+      - key: DEFAULT_PRIVACY
+        value: private
+      - key: TZ_TARGET
+        value: America/New_York
+      - key: TZ_LOCAL
+        value: Asia/Almaty
+      - key: RENDER_DEPLOY
+        value: "1"
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: SERVICE_BASE_URL
+        sync: false
+      - key: YOUTUBE_DRY_RUN
+        value: "0"
+  - name: seed-month-once
+    type: cron
+    env: python
+    plan: free
+    schedule: "0 11 22 9 *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m tasks.seed_month --days 30 --slot "09:00 ET" --start 2025-09-22
+    autoDeploy: true
+    envVars:
+      - key: YOUTUBE_CLIENT_SECRET_JSON
+        sync: false
+      - key: YOUTUBE_TOKEN_JSON
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: CHANNEL_DEFAULT_TAGS
+        value: "shorts,cartoon,comedy"
+      - key: DEFAULT_CATEGORY_ID
+        value: "1"
+      - key: DEFAULT_PRIVACY
+        value: private
+      - key: TZ_TARGET
+        value: America/New_York
+      - key: TZ_LOCAL
+        value: Asia/Almaty
+      - key: RENDER_DEPLOY
+        value: "1"
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: SERVICE_BASE_URL
+        sync: false
+      - key: YOUTUBE_DRY_RUN
+        value: "0"

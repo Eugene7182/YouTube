@@ -1,3 +1,5 @@
+# ruff: noqa
+
 from moviepy.editor import *
 from PIL import Image, ImageDraw, ImageFont
 from pathlib import Path

@@ -5,16 +5,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 
-from typing import TYPE_CHECKING
-
 try:  # pragma: no cover - import guard for environments without gTTS
     from gtts import gTTS  # type: ignore
 except ImportError:  # pragma: no cover - handled gracefully in synth_sync
     gTTS = None  # type: ignore
-
-if TYPE_CHECKING:  # pragma: no cover
-    from gtts import gTTS as gTTSProtocol
-
 
 class TextToSpeechError(RuntimeError):
     """Raised when narration synthesis fails or times out."""

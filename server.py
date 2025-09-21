@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -22,16 +23,20 @@ import yaml
 
 from core.env_compat import (
     OAuthConfigError,
-    ensure_legacy_oauth_env,
+    ensure_inline_oauth_env,
     get_oauth_client_config,
 )
 from core.generate import MANIFEST_PATH, build_all
+from core.settings import get_settings
 from core.upload import upload_manifest
 from tts import TextToSpeechError
 from upload_youtube import UploadConfigurationError
 
 load_dotenv()
-ensure_legacy_oauth_env()
+ensure_inline_oauth_env()
+
+ENV = get_settings()
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path("config.yaml")
 DEFAULT_TOPICS_PATH = Path("config/topics.yaml")
@@ -53,7 +58,7 @@ security = HTTPBearer(
 
 
 def _ensure_timezone() -> None:
-    tz = os.getenv("TZ", "Asia/Almaty")
+    tz = ENV.tz_local
     os.environ["TZ"] = tz
     if hasattr(time, "tzset"):
         time.tzset()  # type: ignore[attr-defined]
@@ -65,7 +70,7 @@ def _startup() -> None:
 
 
 def require_admin(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> None:
-    token_expected = os.getenv("ADMIN_TOKEN", "").strip()
+    token_expected = ENV.admin_token
     if not token_expected:
         return
     if not credentials or credentials.scheme.lower() != "bearer":
@@ -129,10 +134,17 @@ class RunQueueRequest(BaseModel):
     upload: bool = False
 
 
+class UploadResult(BaseModel):
+    title: str
+    status: str
+    videoId: str | None = None
+    reason: str | None = None
+
+
 class RunQueueResponse(BaseModel):
     status: str
     produced: list[dict[str, Any]]
-    uploaded: list[dict[str, str]]
+    uploaded: list[UploadResult]
 
 
 def _load_client_config(redirect_uri: str) -> dict[str, Any]:
@@ -207,7 +219,7 @@ def _parse_queries(raw: str) -> list[str]:
 
 
 def _fetch_ideas(queries: list[str], region: str, limit: int) -> list[IdeaItem]:
-    api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+    api_key = ENV.youtube_api_key
     if not api_key:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="YOUTUBE_API_KEY is not configured")
 
@@ -306,26 +318,21 @@ def _persist_topics(buffer_path: Path, yaml_path: Path, topics: Iterable[TopicMo
 def _resolve_queries(payload: IdeasRefreshRequest) -> list[str]:
     if payload.queries:
         return [query.strip() for query in payload.queries if query.strip()]
-    env_queries = os.getenv("YT_SEARCH_QUERIES", "").strip()
-    if env_queries:
-        return _parse_queries(env_queries)
+    if ENV.search_queries:
+        return list(ENV.search_queries)
     return ["Shorts"]
 
 
 def _resolve_region(payload: IdeasRefreshRequest) -> str:
     if payload.region:
         return payload.region
-    return os.getenv("YOUTUBE_REGION", "US")
+    return ENV.youtube_region
 
 
 def _resolve_limit(payload: IdeasRefreshRequest) -> int:
     if payload.limit is not None:
         return payload.limit
-    env_limit = os.getenv("IDEAS_PER_REFRESH", "50").strip()
-    try:
-        return max(1, min(100, int(env_limit)))
-    except ValueError:
-        return 50
+    return ENV.ideas_per_refresh
 
 
 def build_flow(request: Request) -> tuple[Flow, str]:
@@ -414,10 +421,11 @@ def run_queue(payload: RunQueueRequest) -> RunQueueResponse:
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
-    uploaded: list[dict[str, str]] = []
+    uploaded: list[UploadResult] = []
     if payload.upload:
         try:
-            uploaded = upload_manifest(str(MANIFEST_PATH), str(DEFAULT_CONFIG_PATH))
+            raw_results = upload_manifest(str(MANIFEST_PATH), str(DEFAULT_CONFIG_PATH))
+            uploaded = [UploadResult.parse_obj(item) for item in raw_results]
         except UploadConfigurationError as exc:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
