@@ -14,6 +14,7 @@ from typing import Any, Iterable, List
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -132,6 +133,7 @@ class TrendsGenerateResponse(BaseModel):
 class RunQueueRequest(BaseModel):
     topics: str | List[int | str] = "all"
     upload: bool = False
+    dry_run: bool = False
 
 
 class UploadResult(BaseModel):
@@ -182,6 +184,22 @@ def _load_topics_file(path: Path) -> list[dict[str, Any]]:
         if isinstance(raw, dict) and raw.get("title"):
             result.append(raw)
     return result
+
+
+def _validate_upload_env() -> None:
+    checks = {
+        "YOUTUBE_TOKEN_JSON": "вставьте payload из OAuth Playground (refresh_token)",
+        "YOUTUBE_CLIENT_SECRET_JSON": "укажите client_secret.json как inline JSON",
+        "YOUTUBE_SCOPES": "укажите список scope, например https://www.googleapis.com/auth/youtube.upload",
+    }
+    missing = [name for name in checks if not os.getenv(name, "").strip()]
+    if not missing:
+        return
+    hints = ", ".join(f"{name}: {checks[name]}" for name in missing)
+    raise RuntimeError(
+        "Отсутствуют переменные окружения для загрузки: "
+        f"{', '.join(missing)}. Подсказки: {hints}"
+    )
 
 
 def _title_to_lines(title: str) -> list[str]:
@@ -403,6 +421,7 @@ def trends_generate(payload: TrendsGenerateRequest) -> TrendsGenerateResponse:
 
 @app.post("/run/queue", response_model=RunQueueResponse, dependencies=[Depends(require_admin)])
 def run_queue(payload: RunQueueRequest) -> RunQueueResponse:
+    logger.info("run_queue invoked", extra={"topics": payload.topics, "upload": payload.upload, "dry_run": payload.dry_run})
     all_topics = _load_topics_file(DEFAULT_TOPICS_PATH)
     if not all_topics:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No topics configured")
@@ -413,21 +432,58 @@ def run_queue(payload: RunQueueRequest) -> RunQueueResponse:
             payload.topics,
         )
     except TextToSpeechError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        logger.exception("TTS synthesis failed during run_queue")
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"status": "error", "reason": str(exc)},
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        logger.exception("Topic selection failed during run_queue")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"status": "error", "reason": str(exc)},
+        )
     except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        logger.exception("Generation failed during run_queue")
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"status": "error", "reason": str(exc)},
+        )
     except Exception as exc:  # pragma: no cover - defensive
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        logger.exception("Unexpected failure during run_queue")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": "error", "reason": str(exc)},
+        )
 
     uploaded: list[UploadResult] = []
-    if payload.upload:
+    if payload.upload and not payload.dry_run:
+        try:
+            _validate_upload_env()
+        except RuntimeError as exc:
+            logger.exception("Upload environment validation failed")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"status": "error", "reason": str(exc)},
+            )
         try:
             raw_results = upload_manifest(str(MANIFEST_PATH), str(DEFAULT_CONFIG_PATH))
             uploaded = [UploadResult.parse_obj(item) for item in raw_results]
         except UploadConfigurationError as exc:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+            logger.exception("Uploader configuration error during run_queue")
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": "error", "reason": str(exc)},
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("Unexpected upload failure during run_queue")
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": "error", "reason": str(exc)},
+            )
+
+    if payload.upload and payload.dry_run:
+        logger.info("run_queue dry-run requested; upload skipped", extra={"topics": payload.topics})
 
     return RunQueueResponse(status="ok", produced=produced, uploaded=uploaded)
 

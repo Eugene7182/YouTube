@@ -28,11 +28,12 @@ def _setup_oauth(monkeypatch):
     monkeypatch.setenv("YOUTUBE_CLIENT_SECRET_JSON", json.dumps(client_payload))
     monkeypatch.setenv("YOUTUBE_TOKEN_JSON", json.dumps(token_payload))
     monkeypatch.setenv("CHANNEL_DEFAULT_TAGS", "shorts,test")
+    monkeypatch.setenv("YOUTUBE_SCOPES", "https://www.googleapis.com/auth/youtube.upload")
     monkeypatch.delenv("ADMIN_TOKEN", raising=False)
     yield
 
 
-def test_run_queue_dry_run(monkeypatch, tmp_path):
+def test_run_queue_dry_run_ok(monkeypatch, tmp_path):
     import server
     from core import generate
 
@@ -54,7 +55,7 @@ def test_run_queue_dry_run(monkeypatch, tmp_path):
 
     monkeypatch.setattr(server, "build_all", fake_build_all)
 
-    request = server.RunQueueRequest(topics="all", upload=False)
+    request = server.RunQueueRequest(topics="all", upload=True, dry_run=True)
     response = server.run_queue(request)
 
     assert response.status == "ok"
