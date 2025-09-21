@@ -26,14 +26,15 @@ if __name__ == '__main__':
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open('config.yaml','r',encoding='utf-8'))
-    voice = cfg.get('voice','en-US-JennyNeural')
+    lang = cfg.get('tts_lang', 'ru')
+    timeout = float(cfg.get('tts_timeout', 30))
     font = cfg.get('font','DejaVuSans.ttf')
     load_font(font, 64)
 
     script = generate_script(args.topic, mode=args.mode)
     Path('out_script.md').write_text(script, encoding='utf-8')
 
-    synth_sync(script, 'voice.mp3', voice=voice)
+    synth_sync(script, 'voice.mp3', lang=lang, timeout=timeout)
 
     lines = to_lines(script, args.mode)
     assemble_short(lines, 'voice.mp3', args.topic, 'video.mp4', fps=cfg.get('fps',30), resolution=tuple(cfg.get('resolution',[1080,1920])))

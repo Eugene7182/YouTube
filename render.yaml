@@ -1,14 +1,24 @@
 services:
   - type: web
-    name: yt-shorts-autopipeline
+    name: shorts-bot-pro
     env: python
+    runtime: python3
+    pythonVersion: 3.11.0
     plan: free
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn server:app --host 0.0.0.0 --port 10000"
+    startCommand: "uvicorn server:app --host 0.0.0.0 --port $PORT"
     envVars:
-      - key: YOUTUBE_SCOPES
-        value: https://www.googleapis.com/auth/youtube.upload
-      - key: YOUTUBE_TOKEN_JSON
+      - key: ADMIN_TOKEN
         sync: false
-      - key: YOUTUBE_CLIENT_SECRET_JSON
+      - key: YOUTUBE_API_KEY
         sync: false
+      - key: YT_CLIENT_ID
+        sync: false
+      - key: YT_CLIENT_SECRET
+        sync: false
+      - key: YT_REFRESH_TOKEN
+        sync: false
+      - key: DEFAULT_TAGS
+        value: "shorts,viral"
+      - key: TZ
+        value: Asia/Almaty
