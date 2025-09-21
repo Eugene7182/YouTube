@@ -1,0 +1,32 @@
+name: Post daily topics
+
+on:
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL || vars.BASE_URL }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN || vars.ADMIN_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Trigger upload
+        run: |
+          set -euo pipefail
+          RESPONSE=$(curl -sS -w '\n%{http_code}' -X POST "$BASE_URL/run/queue" \
+            -H "Authorization: Bearer $ADMIN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"topics":"all","upload":true}')
+          STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          if [ -n "$BODY" ]; then
+            echo "$BODY"
+          fi
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -ge 300 ]; then
+            echo "Запрос завершился с кодом $STATUS" >&2
+            exit 1
+          fi
