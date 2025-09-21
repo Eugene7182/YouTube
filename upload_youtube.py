@@ -1,61 +1,79 @@
+"""Utilities for uploading rendered Shorts to YouTube."""
+
+from __future__ import annotations
+
 import os
 from pathlib import Path
+from typing import Sequence
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-SCOPES = [os.getenv("YOUTUBE_SCOPES", "https://www.googleapis.com/auth/youtube.upload")]
-CLIENT_SECRET_PATH = Path(os.getenv("YOUTUBE_CLIENT_SECRET", "client_secret.json"))
-TOKEN_PATH = Path("token.json")
+YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+TOKEN_URI = os.getenv("GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token")
 
 
-def ensure_oauth_files_from_env() -> None:
-    """Persist OAuth secrets from environment variables when provided."""
-
-    token_json = os.getenv("YOUTUBE_TOKEN_JSON", "").strip()
-    client_json = os.getenv("YOUTUBE_CLIENT_SECRET_JSON", "").strip()
-
-    if token_json:
-        TOKEN_PATH.write_text(token_json, encoding="utf-8")
-    if client_json:
-        CLIENT_SECRET_PATH.write_text(client_json, encoding="utf-8")
+class UploadConfigurationError(RuntimeError):
+    """Raised when OAuth credentials are missing or invalid."""
 
 
-def get_service():
-    """Create an authenticated YouTube API client."""
+def _get_credentials() -> Credentials:
+    client_id = os.getenv("YT_CLIENT_ID", "").strip()
+    client_secret = os.getenv("YT_CLIENT_SECRET", "").strip()
+    refresh_token = os.getenv("YT_REFRESH_TOKEN", "").strip()
 
-    ensure_oauth_files_from_env()
+    if not (client_id and client_secret and refresh_token):
+        raise UploadConfigurationError("YouTube OAuth credentials are not fully configured")
 
-    creds = None
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET_PATH), SCOPES)
-            creds = flow.run_local_server(port=0)
-        TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
-    return build('youtube', 'v3', credentials=creds)
+    creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri=TOKEN_URI,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=YOUTUBE_SCOPES,
+    )
+    creds.refresh(Request())
+    return creds
 
 
-def upload(video_path: str, title: str, description: str, tags: list[str], categoryId: str = "24", privacyStatus: str = "private") -> str:
-    """Upload a video to YouTube and return its identifier."""
+def upload_video(
+    video_path: str | Path,
+    title: str,
+    description: str,
+    tags: Sequence[str],
+    *,
+    category_id: str = "24",
+    privacy_status: str = "private",
+) -> dict[str, str]:
+    """Upload a single video file to YouTube."""
 
-    yt = get_service()
+    credentials = _get_credentials()
+    youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
+
+    tags_unique: list[str] = []
+    for tag in tags:
+        normalized = str(tag).strip()
+        if normalized and normalized not in tags_unique:
+            tags_unique.append(normalized)
+
     body = {
-        'snippet': {
-            'title': title,
-            'description': description[:4800],
-            'tags': list(set(tags + ['shorts'])),
-            'categoryId': categoryId,
+        "snippet": {
+            "title": title,
+            "description": description[:4800],
+            "tags": tags_unique,
+            "categoryId": str(category_id),
         },
-        'status': {'privacyStatus': privacyStatus}
+        "status": {"privacyStatus": privacy_status},
     }
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    request = yt.videos().insert(part=','.join(body.keys()), body=body, media_body=media)
+
+    media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     response = request.execute()
-    return response.get('id')
+
+    return {"videoId": response.get("id"), "title": title}
+
+
+__all__ = ["upload_video", "UploadConfigurationError"]
