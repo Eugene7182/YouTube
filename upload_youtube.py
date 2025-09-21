@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
 
@@ -53,6 +54,7 @@ def upload_video(
     *,
     category_id: str = "24",
     privacy_status: str = "private",
+    publish_at: datetime | None = None,
 ) -> dict[str, str]:
     """Upload a single video file to YouTube."""
 
@@ -65,6 +67,11 @@ def upload_video(
         if normalized and normalized not in tags_unique:
             tags_unique.append(normalized)
 
+    status_payload = {"privacyStatus": privacy_status}
+    if publish_at is not None:
+        publish_utc = publish_at.astimezone(timezone.utc)
+        status_payload["publishAt"] = publish_utc.isoformat().replace("+00:00", "Z")
+
     body = {
         "snippet": {
             "title": title,
@@ -72,7 +79,7 @@ def upload_video(
             "tags": tags_unique,
             "categoryId": str(category_id),
         },
-        "status": {"privacyStatus": privacy_status},
+        "status": status_payload,
     }
 
     media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
