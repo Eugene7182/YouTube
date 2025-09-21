@@ -2,7 +2,10 @@
 
 import textwrap
 
-from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+try:
+    from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+except ImportError:  # pragma: no cover - fallback for MoviePy<2.0
+    from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
 from PIL import Image, ImageDraw, ImageFont
 
 from utils.video_io import as_np_frame
