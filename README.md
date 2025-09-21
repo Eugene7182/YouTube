@@ -16,6 +16,10 @@
 | `YT_REFRESH_TOKEN` | OAuth Refresh Token с правом `youtube.upload` | — |
 | `DEFAULT_TAGS` | CSV-теги по умолчанию для генерации/загрузки | — |
 | `GOOGLE_TOKEN_URI` | Пользовательский OAuth token endpoint (опционально) | `https://oauth2.googleapis.com/token` |
+| `YOUTUBE_CLIENT_SECRET_JSON` | (Легаси) JSON с OAuth client (auto-parse) | — |
+| `YOUTUBE_TOKEN_JSON` | (Легаси) JSON с refresh_token (auto-parse) | — |
+
+> ⚙️ **Совместимость:** сервис автоматически извлекает `YT_CLIENT_ID`, `YT_CLIENT_SECRET`, `YT_REFRESH_TOKEN` из старых JSON переменных, если они заданы.
 
 Файлы конфигурации:
 - `config.yaml` — базовые параметры генерации (fps, разрешение, хэштеги и пр.).

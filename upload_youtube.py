@@ -11,6 +11,8 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+from core.env_compat import ensure_legacy_oauth_env
+
 YOUTUBE_SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 TOKEN_URI = os.getenv("GOOGLE_TOKEN_URI", "https://oauth2.googleapis.com/token")
 
@@ -19,7 +21,11 @@ class UploadConfigurationError(RuntimeError):
     """Raised when OAuth credentials are missing or invalid."""
 
 
-def _get_credentials() -> Credentials:
+def get_credentials() -> Credentials:
+    """Load OAuth credentials, refreshing the access token if needed."""
+
+    ensure_legacy_oauth_env()
+
     client_id = os.getenv("YT_CLIENT_ID", "").strip()
     client_secret = os.getenv("YT_CLIENT_SECRET", "").strip()
     refresh_token = os.getenv("YT_REFRESH_TOKEN", "").strip()
@@ -30,7 +36,7 @@ def _get_credentials() -> Credentials:
     creds = Credentials(
         token=None,
         refresh_token=refresh_token,
-        token_uri=TOKEN_URI,
+        token_uri=os.getenv("GOOGLE_TOKEN_URI", TOKEN_URI),
         client_id=client_id,
         client_secret=client_secret,
         scopes=YOUTUBE_SCOPES,
@@ -50,7 +56,7 @@ def upload_video(
 ) -> dict[str, str]:
     """Upload a single video file to YouTube."""
 
-    credentials = _get_credentials()
+    credentials = get_credentials()
     youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
     tags_unique: list[str] = []
@@ -76,4 +82,4 @@ def upload_video(
     return {"videoId": response.get("id"), "title": title}
 
 
-__all__ = ["upload_video", "UploadConfigurationError"]
+__all__ = ["upload_video", "UploadConfigurationError", "get_credentials"]

@@ -19,12 +19,18 @@ from google_auth_oauthlib.flow import Flow
 from pydantic import BaseModel, Field, validator
 import yaml
 
+from core.env_compat import (
+    OAuthConfigError,
+    ensure_legacy_oauth_env,
+    get_oauth_client_config,
+)
 from core.generate import MANIFEST_PATH, build_all
 from core.upload import upload_manifest
 from tts import TextToSpeechError
 from upload_youtube import UploadConfigurationError
 
 load_dotenv()
+ensure_legacy_oauth_env()
 
 DEFAULT_CONFIG_PATH = Path("config.yaml")
 DEFAULT_TOPICS_PATH = Path("config/topics.yaml")
@@ -116,17 +122,14 @@ class RunQueueResponse(BaseModel):
     uploaded: list[dict[str, str]]
 
 
-def _load_client_config() -> dict[str, Any]:
-    raw = os.getenv("YOUTUBE_CLIENT_SECRET_JSON", "").strip()
-    if not raw:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="YOUTUBE_CLIENT_SECRET_JSON is not configured")
+def _load_client_config(redirect_uri: str) -> dict[str, Any]:
     try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as exc:  # pragma: no cover - configuration error
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invalid YOUTUBE_CLIENT_SECRET_JSON payload") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="YOUTUBE_CLIENT_SECRET_JSON must be a JSON object")
-    return payload
+        return get_oauth_client_config(redirect_uri)
+    except OAuthConfigError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
 
 
 def _resolve_scopes() -> list[str]:
@@ -336,7 +339,7 @@ def build_flow(request: Request) -> tuple[Flow, str]:
 
     redirect_uri = f"{scheme}://{host}/oauth/callback"
     flow = Flow.from_client_config(
-        _load_client_config(),
+        _load_client_config(redirect_uri),
         scopes=_resolve_scopes(),
         redirect_uri=redirect_uri,
     )
