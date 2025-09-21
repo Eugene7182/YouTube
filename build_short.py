@@ -1,9 +1,11 @@
 # ruff: noqa
 
-from moviepy.editor import *
-from PIL import Image, ImageDraw, ImageFont
-from pathlib import Path
 import textwrap
+
+from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+from PIL import Image, ImageDraw, ImageFont
+
+from utils.video_io import as_np_frame
 
 FONT = None
 
@@ -35,7 +37,7 @@ def caption_frame(text: str, size=(1080,1920), bg=(20,20,25), fg=(255,255,255), 
         draw.rectangle((x-14, y-10, x+tw+14, y+th+10), fill=(0,0,0,140))
         draw.text((x, y), ln, font=FONT, fill=fg)
         y += th + 28
-    return ImageClip(img).set_duration(2.0)
+    return ImageClip(as_np_frame(img)).set_duration(2.0)
 
 def assemble_short(lines: list[str], audio_path: str, title: str, out_path: str, fps=30, resolution=(1080,1920)):
     aclip = AudioFileClip(audio_path)

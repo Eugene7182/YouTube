@@ -140,6 +140,13 @@ def upload_manifest(manifest_path: str, settings_path: str) -> list[dict[str, st
             validate_video(video_info)
             schedule_utc = _parse_schedule(entry.get("schedule"), settings)
             publish_at = _ensure_future_publish_at(schedule_utc)
+            logger.info(
+                "Prepared upload entry",
+                extra={
+                    "title": metadata.title,
+                    "publishAt": publish_at.isoformat() if publish_at else None,
+                },
+            )
             privacy_status = privacy_status_default
             if publish_at is not None:
                 privacy_status = "private"

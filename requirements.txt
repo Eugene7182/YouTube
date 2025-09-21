@@ -1,12 +1,15 @@
 fastapi
 uvicorn[standard]
-moviepy==1.0.3
+moviepy>=1.0.3
+numpy>=1.24
+Pillow>=10
+imageio>=2.34
+imageio-ffmpeg>=0.4.9
 gTTS==2.5.1
 google-api-python-client
 google-auth
 google-auth-oauthlib
 PyYAML
 python-dotenv
-Pillow
 requests
 pytest

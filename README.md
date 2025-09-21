@@ -38,6 +38,25 @@
 
 Базовый health-check: `GET /health`. Документация: `GET /docs`.
 
+### Быстрый старт через Swagger UI
+
+1. Перейдите на `/docs`, нажмите **Authorize** и вставьте `ADMIN_TOKEN`, если он задан.
+2. В секции **/trends/generate** нажмите **Try it out** и вставьте пример:
+   ```json
+   {
+     "topics": [
+       {
+         "title": "Test topic",
+         "lines": ["Hook", "Twist"],
+         "tags": ["shorts", "demo"]
+       }
+     ]
+   }
+   ```
+   После **Execute** должно вернуться `{ "count": 1 }`.
+3. В секции **/run/queue** вызовите эндпоинт с телом `{"topics": "all", "upload": true, "dry_run": true}` — сервис выполнит сборку, но пропустит фактическую загрузку. Ответ содержит `status: "ok"` и `produced` ≥ 1.
+4. Для реального аплоада снимите `dry_run` и повторите вызов; при успешном аплоаде в логах появится `videoId`, а в ответе — статус `uploaded`.
+
 ## Ротация расписания
 
 - `tasks/seed_month.py` генерирует 30 слотов (по умолчанию 09:00 ET) и отправляет их в очередь. Можно вызвать `python -m tasks.seed_month --start 2025-01-01 --days 30 --slot "09:00 ET" --dry-run`.
