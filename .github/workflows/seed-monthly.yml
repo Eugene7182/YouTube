@@ -1,0 +1,64 @@
+name: Seed monthly topics (scheduled)
+
+on:
+  schedule:
+    - cron: '0 12 1 * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL || vars.BASE_URL }}
+      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN || vars.ADMIN_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install requests python-dateutil
+      - name: Determine start date
+        run: |
+          START_DATE=$(python - <<'PY'
+from datetime import date, datetime, timedelta, timezone
+
+
+def nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
+    first_day = date(year, month, 1)
+    first_weekday = first_day.weekday()
+    delta_days = (weekday - first_weekday) % 7 + 7 * (occurrence - 1)
+    return first_day + timedelta(days=delta_days)
+
+
+def et_offset(current_date: date) -> int:
+    dst_start = nth_weekday(current_date.year, 3, 6, 2)
+    dst_end = nth_weekday(current_date.year, 11, 6, 1)
+    if dst_start <= current_date < dst_end:
+        return -4
+    return -5
+
+
+def now_et() -> datetime:
+    now_utc = datetime.now(timezone.utc)
+    for offset in (-4, -5):
+        candidate = now_utc + timedelta(hours=offset)
+        if et_offset(candidate.date()) == offset:
+            return candidate
+    return now_utc + timedelta(hours=-5)
+
+
+def first_day_next_month(current: datetime) -> date:
+    year = current.year + (1 if current.month == 12 else 0)
+    month = 1 if current.month == 12 else current.month + 1
+    return date(year, month, 1)
+
+print(first_day_next_month(now_et()).isoformat())
+PY
+          )
+          echo "START_DATE=$START_DATE" >> "$GITHUB_ENV"
+      - name: Seed monthly topics
+        run: |
+          python scripts/seed_month.py --start "$START_DATE"
