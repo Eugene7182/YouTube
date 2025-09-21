@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import numpy as np
-from moviepy.editor import ImageSequenceClip
+
+try:
+    from moviepy import ImageSequenceClip
+except ImportError:  # pragma: no cover - fallback for MoviePy<2.0
+    from moviepy.editor import ImageSequenceClip
 from PIL import Image
 
 from utils.video_io import as_np_frame, as_np_frames

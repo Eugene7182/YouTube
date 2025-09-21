@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from moviepy.editor import VideoFileClip
+try:
+    from moviepy import VideoFileClip
+except ImportError:  # pragma: no cover - fallback for MoviePy<2.0
+    from moviepy.editor import VideoFileClip
 
 TITLE_LIMIT = 100
 DESCRIPTION_LIMIT = 4900
