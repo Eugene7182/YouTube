@@ -1,4 +1,5 @@
 # main.py — минимальный FastAPI с веб-OAuth для Render
+import asyncio
 import json
 import os
 
@@ -8,7 +9,17 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import Flow
 
+from config import settings
+
 app = FastAPI()
+
+
+try:  # noqa: SIM105 - optional dependency
+    import httpx
+except Exception:  # pragma: no cover - httpx missing locally is OK
+    httpx = None
+
+import ideas
 
 
 @app.get("/auth/whoami")
@@ -31,6 +42,46 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+
+@app.get("/config")
+def read_config():
+    """Expose active safe configuration values without leaking secrets."""
+
+    return {
+        "AUTO_ON": settings.AUTO_ON,
+        "TIMEZONE": settings.TIMEZONE,
+        "DAILY_SLOTS": settings.DAILY_SLOTS,
+        "AUTO_TIMES": settings.AUTO_TIMES,
+        "CONTENT_PLAN_PATH": settings.CONTENT_PLAN_PATH,
+        "YOUTUBE_UPLOAD_PRIVACY": settings.YOUTUBE_UPLOAD_PRIVACY,
+        "PING_URL": bool(settings.PING_URL),
+    }
+
+
+async def _internal_keepalive() -> None:
+    """Fire-and-forget keep-alive loop for Render free tier."""
+
+    if not settings.PING_URL or not httpx:
+        return
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        while True:
+            try:
+                await client.get(settings.PING_URL)
+            except Exception:  # pragma: no cover - best-effort ping
+                pass
+            await asyncio.sleep(300)
+
+
+@app.on_event("startup")
+async def _maybe_start_keepalive() -> None:
+    """Schedule keep-alive task without breaking existing startup logic."""
+
+    try:
+        asyncio.create_task(_internal_keepalive())
+    except Exception:  # pragma: no cover - scheduler safety net
+        pass
 
 SCOPES = [os.getenv("YOUTUBE_SCOPES", "https://www.googleapis.com/auth/youtube.upload")]
 
@@ -85,8 +136,6 @@ def oauth_callback(request: Request):
     }
     pretty = json.dumps(token_json, ensure_ascii=False, indent=2)
     return f"<h2>Готово ✅ Скопируй JSON в Render → Environment → YOUTUBE_TOKEN_JSON</h2><pre>{pretty}</pre>"
-import asyncio
-import ideas
 
 
 @app.post("/ideas/refresh")
