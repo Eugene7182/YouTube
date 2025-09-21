@@ -4,14 +4,17 @@ import json
 import os
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from google.oauth2.credentials import Credentials
+from fastapi.responses import HTMLResponse, RedirectResponse
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import Flow
 
 from config import settings
+from core.env_compat import OAuthConfigError, ensure_legacy_oauth_env, get_oauth_client_config
+from upload_youtube import UploadConfigurationError, get_credentials
 
 app = FastAPI()
+
+ensure_legacy_oauth_env()
 
 
 try:  # noqa: SIM105 - optional dependency
@@ -27,10 +30,12 @@ def whoami():
     """Return channel metadata for the current OAuth credentials."""
 
     try:
-        creds = Credentials(**json.loads(os.environ["YOUTUBE_TOKEN_JSON"]))
+        creds = get_credentials()
         yt = build("youtube", "v3", credentials=creds)
         me = yt.channels().list(part="id,snippet,statistics", mine=True).execute()
         return {"ok": True, "me": me}
+    except UploadConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - diagnostic helper
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -90,21 +95,10 @@ def _cb_url(req: Request) -> str:
     return f"https://{host}/oauth/callback"
 
 def _client_config(cb_url: str):
-    cfg = json.loads(os.environ["YOUTUBE_CLIENT_SECRET_JSON"])
-    if "web" in cfg:
-        web = cfg["web"]
-        web["redirect_uris"] = [cb_url]
-        return {"web": web}
-    if "installed" in cfg:
-        ins = cfg["installed"]
-        return {"web": {
-            "client_id": ins["client_id"],
-            "client_secret": ins["client_secret"],
-            "auth_uri": ins["auth_uri"],
-            "token_uri": ins["token_uri"],
-            "redirect_uris": [cb_url],
-        }}
-    raise RuntimeError("Bad YOUTUBE_CLIENT_SECRET_JSON")
+    try:
+        return get_oauth_client_config(cb_url)
+    except OAuthConfigError as exc:  # pragma: no cover - configuration error
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @app.get("/auth/start")
 def auth_start(request: Request):

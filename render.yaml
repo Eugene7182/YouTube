@@ -10,8 +10,16 @@ services:
     envVars:
       - key: ADMIN_TOKEN
         sync: false
+      - key: TZ
+        value: Asia/Almaty
       - key: YOUTUBE_API_KEY
         sync: false
+      - key: YOUTUBE_REGION
+        value: US
+      - key: YT_SEARCH_QUERIES
+        sync: false
+      - key: IDEAS_PER_REFRESH
+        value: "50"
       - key: YT_CLIENT_ID
         sync: false
       - key: YT_CLIENT_SECRET
@@ -19,6 +27,6 @@ services:
       - key: YT_REFRESH_TOKEN
         sync: false
       - key: DEFAULT_TAGS
-        value: "shorts,viral"
-      - key: TZ
-        value: Asia/Almaty
+        sync: false
+      - key: GOOGLE_TOKEN_URI
+        value: https://oauth2.googleapis.com/token

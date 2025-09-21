@@ -1,10 +1,10 @@
+fastapi
+uvicorn[standard]
 moviepy==1.0.3
-gtts==2.5.1
+gTTS==2.5.1
 google-api-python-client
 google-auth
 google-auth-oauthlib
-fastapi
-uvicorn[standard]
 PyYAML
 python-dotenv
 Pillow
