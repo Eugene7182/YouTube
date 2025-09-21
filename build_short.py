@@ -3,9 +3,9 @@
 import textwrap
 
 try:
-    from moviepy import AudioFileClip, ImageClip, concatenate_videoclips
+    from moviepy import AudioFileClip, ImageClip, CompositeVideoClip, TextClip, concatenate_videoclips, vfx
 except ImportError:  # pragma: no cover - fallback for MoviePy<2.0
-    from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+    from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip, TextClip, concatenate_videoclips, vfx
 from PIL import Image, ImageDraw, ImageFont
 
 from utils.video_io import as_np_frame
@@ -40,13 +40,13 @@ def caption_frame(text: str, size=(1080,1920), bg=(20,20,25), fg=(255,255,255), 
         draw.rectangle((x-14, y-10, x+tw+14, y+th+10), fill=(0,0,0,140))
         draw.text((x, y), ln, font=FONT, fill=fg)
         y += th + 28
-    return ImageClip(as_np_frame(img)).set_duration(2.0)
+    return ImageClip(as_np_frame(img), duration=2.0)
 
 def assemble_short(lines: list[str], audio_path: str, title: str, out_path: str, fps=30, resolution=(1080,1920)):
     aclip = AudioFileClip(audio_path)
     seg = max(1.8, aclip.duration / max(1, len(lines)))
-    clips = [caption_frame(ln, size=resolution).set_duration(seg) for ln in lines]
-    v = concatenate_videoclips(clips, method="compose").set_audio(aclip)
+    clips = [caption_frame(ln, size=resolution).with_duration(seg) for ln in lines]
+    v = concatenate_videoclips(clips, method="compose").with_audio(aclip)
     v.write_videofile(out_path, fps=fps, codec="libx264", audio_codec="aac")
 
 if __name__ == "__main__":
