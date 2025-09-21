@@ -12,6 +12,7 @@ from typing import Any, Iterable, List
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -35,10 +36,20 @@ ensure_legacy_oauth_env()
 DEFAULT_CONFIG_PATH = Path("config.yaml")
 DEFAULT_TOPICS_PATH = Path("config/topics.yaml")
 TOPICS_BUFFER_PATH = Path("data/input/topics_buffer.json")
-TMP_QUEUE_PATH = Path("data/input/queue_topics.yaml")
 
 app = FastAPI(title="Shorts-Bot PRO", version="1.0.0")
-security = HTTPBearer(auto_error=False)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+security = HTTPBearer(
+    auto_error=False,
+    scheme_name="AdminToken",
+    bearerFormat="Bearer",
+    description="Вставьте значение ADMIN_TOKEN без префикса",
+)
 
 
 def _ensure_timezone() -> None:
@@ -56,8 +67,10 @@ def _startup() -> None:
 def require_admin(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> None:
     token_expected = os.getenv("ADMIN_TOKEN", "").strip()
     if not token_expected:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="ADMIN_TOKEN is not configured")
-    if not credentials or credentials.scheme.lower() != "bearer" or credentials.credentials != token_expected:
+        return
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+    if credentials.credentials != token_expected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bearer token")
 
 
@@ -346,9 +359,22 @@ def build_flow(request: Request) -> tuple[Flow, str]:
     return flow, redirect_uri
 
 
+@app.get("/", response_model=dict)
+def root() -> dict[str, Any]:
+    return {
+        "message": "Shorts-Bot PRO backend активен",
+        "links": {"health": "/health", "docs": "/docs", "trends": "/trends/generate"},
+    }
+
+
 @app.get("/health", response_model=dict)
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ideas/refresh", response_model=dict)
+def ideas_refresh_hint() -> dict[str, str]:
+    return {"hint": "используй POST /trends/generate для ручного ввода тем"}
 
 
 @app.post("/ideas/refresh", response_model=IdeasRefreshResponse, dependencies=[Depends(require_admin)])
@@ -373,31 +399,18 @@ def run_queue(payload: RunQueueRequest) -> RunQueueResponse:
     all_topics = _load_topics_file(DEFAULT_TOPICS_PATH)
     if not all_topics:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No topics configured")
-
-    if isinstance(payload.topics, str) and payload.topics == "all":
-        selected = all_topics
-    else:
-        selected: list[dict[str, Any]] = []
-        selectors = payload.topics if isinstance(payload.topics, list) else []
-        for selector in selectors:
-            if isinstance(selector, int):
-                if 0 <= selector < len(all_topics):
-                    selected.append(all_topics[selector])
-            else:
-                normalized = str(selector).strip().lower()
-                match = next((topic for topic in all_topics if str(topic.get("title", "")).strip().lower() == normalized), None)
-                if match:
-                    selected.append(match)
-        if not selected:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No matching topics found")
-
-    TMP_QUEUE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    TMP_QUEUE_PATH.write_text(yaml.safe_dump(selected, allow_unicode=True, sort_keys=False), encoding="utf-8")
-
     try:
-        produced = build_all(str(DEFAULT_CONFIG_PATH), str(TMP_QUEUE_PATH))
+        produced = build_all(
+            str(DEFAULT_CONFIG_PATH),
+            str(DEFAULT_TOPICS_PATH),
+            payload.topics,
+        )
     except TextToSpeechError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - defensive
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 

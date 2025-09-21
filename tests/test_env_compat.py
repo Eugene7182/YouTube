@@ -15,6 +15,7 @@ def _clear_env(monkeypatch):
     for key in [
         "YOUTUBE_CLIENT_SECRET_JSON",
         "YOUTUBE_TOKEN_JSON",
+        "YOUTUBE_CLIENT_SECRET_FILE",
         "YT_CLIENT_ID",
         "YT_CLIENT_SECRET",
         "YT_REFRESH_TOKEN",
@@ -40,6 +41,26 @@ def test_get_oauth_client_config_from_json(monkeypatch):
 
     assert config["web"]["client_id"] == "legacy-client"
     assert config["web"]["client_secret"] == "legacy-secret"
+    assert config["web"]["redirect_uris"] == ["https://service.local/oauth/callback"]
+
+
+def test_get_oauth_client_config_from_file(monkeypatch, tmp_path: Path):
+    payload = {
+        "web": {
+            "client_id": "file-client",
+            "client_secret": "file-secret",
+            "redirect_uris": ["http://localhost"],
+        }
+    }
+    secret_file = tmp_path / "client_secret.json"
+    secret_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setenv("YOUTUBE_CLIENT_SECRET_FILE", str(secret_file))
+
+    config = get_oauth_client_config("https://service.local/oauth/callback")
+
+    assert config["web"]["client_id"] == "file-client"
+    assert config["web"]["client_secret"] == "file-secret"
     assert config["web"]["redirect_uris"] == ["https://service.local/oauth/callback"]
 
 
