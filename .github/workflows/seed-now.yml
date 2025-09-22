@@ -4,25 +4,41 @@ on:
   workflow_dispatch:
     inputs:
       start:
-        description: 'Дата старта (YYYY-MM-DD, по ET). Оставьте пустым для значения по умолчанию.'
+        description: "Дата старта (YYYY-MM-DD, ET)."
         required: false
-        default: ''
 
 jobs:
   seed:
     runs-on: ubuntu-latest
-    env:
-      BASE_URL: ${{ secrets.BASE_URL || vars.BASE_URL }}
-      ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN || vars.ADMIN_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Ensure secrets configured
+        run: |
+          if [ -z "${BASE_URL}" ] || [ -z "${ADMIN_TOKEN}" ]; then
+            echo "BASE_URL and ADMIN_TOKEN secrets are required for seeding." >&2
+            exit 1
+          fi
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+
       - name: Install dependencies
         run: pip install requests python-dateutil
-      - name: Seed monthly topics
+
+      - name: Seed topics
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          python scripts/seed_month.py --start "${{ inputs.start || '' }}"
+          if [ -n "${{ inputs.start }}" ]; then
+            python scripts/seed_month.py --start "${{ inputs.start }}" --days 30 --slots "09:00,15:00,20:00"
+          else
+            python scripts/seed_month.py --days 30 --slots "09:00,15:00,20:00"
+          fi
