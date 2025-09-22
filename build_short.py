@@ -61,13 +61,61 @@ def assemble_short(
     out_path: str,
     fps: int = 30,
     resolution: tuple[int, int] = (1080, 1920),
+    max_duration: float = 12.0,
 ):
     """Собрать короткое видео из слайдов и озвучки."""
-    aclip = AudioFileClip(audio_path)
-    seg = max(1.8, aclip.duration / max(1, len(lines)))
-    clips = [clip_with_duration(caption_frame(ln, size=resolution), seg) for ln in lines]
-    v = clip_with_audio(concatenate_videoclips(clips, method="compose"), aclip)
-    v.write_videofile(out_path, fps=fps, codec="libx264", audio_codec="aac")
+
+    prepared_lines = [str(line) for line in lines if str(line).strip()]
+    if not prepared_lines:
+        prepared_lines = ["Hook", "Setup", "Twist"]
+
+    safe_max_duration = float(max_duration or 12.0)
+    if safe_max_duration <= 0:
+        safe_max_duration = 12.0
+
+    with AudioFileClip(audio_path) as base_audio:
+        if base_audio.duration > safe_max_duration:
+            audio_clip = base_audio.subclip(0, safe_max_duration)
+        else:
+            audio_clip = base_audio
+
+        target_duration = max(audio_clip.duration, 0.1)
+        audio_clip = clip_with_duration(audio_clip, target_duration)
+        segment_duration = target_duration / max(1, len(prepared_lines))
+
+        clips = []
+        elapsed = 0.0
+        for index, line in enumerate(prepared_lines):
+            remaining = len(prepared_lines) - index
+            if remaining <= 1:
+                duration = max(target_duration - elapsed, 0.1)
+            else:
+                duration = max(segment_duration, 0.1)
+            clip = clip_with_duration(caption_frame(line, size=resolution), duration)
+            clips.append(clip)
+            elapsed += duration
+
+        video = None
+        rendered = None
+        try:
+            video = concatenate_videoclips(clips, method="compose")
+            rendered = clip_with_audio(video, audio_clip)
+            rendered.write_videofile(
+                out_path,
+                fps=fps,
+                codec="libx264",
+                audio_codec="aac",
+                threads=1,
+            )
+        finally:
+            if rendered is not None and rendered is not video:
+                rendered.close()
+            if video is not None:
+                video.close()
+            for clip in clips:
+                clip.close()
+            if audio_clip is not base_audio:
+                audio_clip.close()
 
 if __name__ == "__main__":
     load_font("DejaVuSans.ttf", 64)
