@@ -94,8 +94,17 @@ def clip_with_audio(clip: ClipT, audio_clip: Any) -> ClipT:
 def clip_with_audio_fadein(clip: ClipT, duration: float) -> ClipT:
     """Применить fade-in к аудио с учётом доступного API."""
 
-    if hasattr(clip, "fx") and audio_fx is not None:
-        return clip.fx(audio_fx.audio_fadein, duration)  # type: ignore[attr-defined]
+    if hasattr(clip, "fx"):
+        fadein_fx = getattr(audio_fx, "audio_fadein", None) if audio_fx is not None else None
+
+        if fadein_fx is None:
+
+            def _noop_fadein(target_clip: ClipT, _duration: float) -> ClipT:
+                return target_clip
+
+            fadein_fx = _noop_fadein
+
+        return clip.fx(fadein_fx, duration)  # type: ignore[arg-type]
 
     legacy = getattr(clip, "audio_fadein", None)
     if callable(legacy):  # pragma: no cover - MoviePy<2 provides bound method
@@ -107,8 +116,17 @@ def clip_with_audio_fadein(clip: ClipT, duration: float) -> ClipT:
 def clip_with_audio_fadeout(clip: ClipT, duration: float) -> ClipT:
     """Применить fade-out к аудио независимо от версии MoviePy."""
 
-    if hasattr(clip, "fx") and audio_fx is not None:
-        return clip.fx(audio_fx.audio_fadeout, duration)  # type: ignore[attr-defined]
+    if hasattr(clip, "fx"):
+        fadeout_fx = getattr(audio_fx, "audio_fadeout", None) if audio_fx is not None else None
+
+        if fadeout_fx is None:
+
+            def _noop_fadeout(target_clip: ClipT, _duration: float) -> ClipT:
+                return target_clip
+
+            fadeout_fx = _noop_fadeout
+
+        return clip.fx(fadeout_fx, duration)  # type: ignore[arg-type]
 
     legacy = getattr(clip, "audio_fadeout", None)
     if callable(legacy):  # pragma: no cover - MoviePy<2 provides bound method

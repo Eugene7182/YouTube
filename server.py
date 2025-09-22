@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any, Iterable, List
 
@@ -28,6 +29,7 @@ from core.env_compat import (
     get_oauth_client_config,
 )
 from core.generate import MANIFEST_PATH, build_all
+from core.scheduler import make_month_plan, queue_due, save_schedule
 from core.settings import get_settings
 from core.upload import upload_manifest
 from tts import TextToSpeechError
@@ -147,6 +149,24 @@ class RunQueueResponse(BaseModel):
     status: str
     produced: list[dict[str, Any]]
     uploaded: list[UploadResult]
+
+
+class SeedMonthRequest(BaseModel):
+    start: date
+    slots: list[str] | None = None
+    topics: list[str] | None = None
+
+
+class SchedulerTickRequest(BaseModel):
+    limit: int = Field(default=1, ge=1, le=10)
+    upload: bool = True
+    dry_run: bool = False
+
+
+class SchedulerTickResponse(BaseModel):
+    picked: int
+    produced: list[dict[str, Any]]
+    errors: list[dict[str, Any]]
 
 
 def _load_client_config(redirect_uri: str) -> dict[str, Any]:
@@ -417,6 +437,42 @@ def trends_generate(payload: TrendsGenerateRequest) -> TrendsGenerateResponse:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Topics payload is empty")
     created = _persist_topics(TOPICS_BUFFER_PATH, DEFAULT_TOPICS_PATH, payload.topics)
     return TrendsGenerateResponse(count=created)
+
+
+@app.post("/scheduler/seed-month", response_model=dict, dependencies=[Depends(require_admin)])
+def scheduler_seed_month(payload: SeedMonthRequest) -> dict[str, Any]:
+    slots = payload.slots or ["09:00", "15:00", "21:00"]
+    topics_seed = payload.topics or []
+    plan = make_month_plan(payload.start, topics_seed, slots)
+    schedule_items: list[dict[str, Any]] = []
+    for topic in plan:
+        schedule = topic.schedule or ""
+        if not schedule:
+            continue
+        schedule_items.append(
+            {
+                "title": topic.title,
+                "schedule": schedule,
+                "status": "queued",
+                "lines": list(topic.lines),
+                "tags": list(topic.tags),
+            }
+        )
+
+    save_schedule(schedule_items)
+    return {"count": len(schedule_items)}
+
+
+@app.post("/scheduler/tick", response_model=SchedulerTickResponse, dependencies=[Depends(require_admin)])
+def scheduler_tick(payload: SchedulerTickRequest | None = None) -> SchedulerTickResponse:
+    params = payload or SchedulerTickRequest()
+    result = queue_due(
+        limit=params.limit,
+        upload=params.upload,
+        dry_run=params.dry_run,
+        validate_upload_env=_validate_upload_env,
+    )
+    return SchedulerTickResponse(**result)
 
 
 @app.post("/run/queue", response_model=RunQueueResponse, dependencies=[Depends(require_admin)])

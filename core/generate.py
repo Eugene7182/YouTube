@@ -23,6 +23,59 @@ VIDEO_ROOT = OUTPUT_ROOT / "video"
 MANIFEST_PATH = OUTPUT_ROOT / "manifest.json"
 
 
+def _parse_resolution_env() -> tuple[int, int] | None:
+    raw = os.getenv("SHORTS_SIZE", "").strip().lower()
+    if not raw:
+        return None
+    try:
+        width_str, height_str = raw.split("x", 1)
+        width = int(width_str)
+        height = int(height_str)
+    except (ValueError, AttributeError):
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def _parse_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _parse_positive_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _coerce_positive_int(value: Any, default: int) -> int:
+    try:
+        casted = int(value)
+    except (TypeError, ValueError):
+        return default
+    return casted if casted > 0 else default
+
+
+def _coerce_positive_float(value: Any, default: float) -> float:
+    try:
+        casted = float(value)
+    except (TypeError, ValueError):
+        return default
+    return casted if casted > 0 else default
+
+
 def _slugify(value: str) -> str:
     """Produce a filesystem-safe slug from an arbitrary string."""
 
@@ -60,8 +113,29 @@ def _load_config(cfg_path: Path) -> dict[str, Any]:
     cfg["default_tags"] = merged_defaults
     cfg.setdefault("tts_lang", "ru")
     cfg.setdefault("tts_timeout", 30)
-    cfg.setdefault("fps", 30)
-    cfg.setdefault("resolution", [1080, 1920])
+
+    resolution_env = _parse_resolution_env()
+    if resolution_env:
+        cfg["resolution"] = [int(resolution_env[0]), int(resolution_env[1])]
+    else:
+        resolution_cfg = cfg.get("resolution")
+        if isinstance(resolution_cfg, (list, tuple)) and len(resolution_cfg) >= 2:
+            cfg["resolution"] = [int(resolution_cfg[0]), int(resolution_cfg[1])]
+        else:
+            cfg["resolution"] = [720, 1280]
+
+    fps_env_raw = os.getenv("SHORTS_FPS", "").strip()
+    if fps_env_raw:
+        cfg["fps"] = _parse_positive_int_env("SHORTS_FPS", 24)
+    else:
+        cfg["fps"] = _coerce_positive_int(cfg.get("fps"), 24)
+
+    max_secs_env_raw = os.getenv("SHORTS_MAX_SECS", "").strip()
+    if max_secs_env_raw:
+        cfg["max_duration"] = _parse_positive_float_env("SHORTS_MAX_SECS", 12.0)
+    else:
+        cfg["max_duration"] = _coerce_positive_float(cfg.get("max_duration"), 12.0)
+
     cfg.setdefault("font", "DejaVuSans.ttf")
     cfg.setdefault("font_size", 64)
 
@@ -263,11 +337,12 @@ def build_all(
     _ensure_directories()
     load_font(str(cfg.get("font")), int(cfg.get("font_size", 64)))
 
-    resolution = cfg.get("resolution", [1080, 1920])
+    resolution = cfg.get("resolution", [720, 1280])
     if isinstance(resolution, (list, tuple)) and len(resolution) >= 2:
         width, height = int(resolution[0]), int(resolution[1])
     else:
-        width, height = 1080, 1920
+        width, height = 720, 1280
+    max_duration = float(cfg.get("max_duration", 12.0))
 
     produced: list[dict[str, Any]] = []
     manifest_items: list[dict[str, Any]] = []
@@ -323,8 +398,9 @@ def build_all(
             audio_path.as_posix(),
             title,
             video_path.as_posix(),
-            fps=int(cfg.get("fps", 30)),
+            fps=int(cfg.get("fps", 24)),
             resolution=(width, height),
+            max_duration=max_duration,
         )
 
         produced_item = {

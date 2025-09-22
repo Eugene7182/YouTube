@@ -1,0 +1,41 @@
+name: Shorts cron scheduler
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 14 * * *'
+    - cron: '20 0 1 * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    if: github.event_name != 'schedule' || github.event.schedule != '20 0 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up Render service
+        run: curl -fsS https://youtube-zkp6.onrender.com/health
+      - name: Trigger scheduler tick
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          curl -fsS -X POST https://youtube-zkp6.onrender.com/scheduler/tick \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"limit":1}'
+
+  seed:
+    if: github.event_name == 'schedule' && github.event.schedule == '20 0 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm up Render service
+        run: curl -fsS https://youtube-zkp6.onrender.com/health
+      - name: Seed month
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          NOW=$(date -u +%Y-%m-01)
+          curl -fsS -X POST https://youtube-zkp6.onrender.com/scheduler/seed-month \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"start\":\"$NOW\",\"slots\":[\"09:00\",\"15:00\",\"21:00\"],\"topics\":[]}" 
