@@ -23,13 +23,16 @@ def render_text_frame(text, w=1080, h=1920, font_path="assets/fonts/Inter-Bold.t
         lines.extend(wrapped)
 
     # backdrop under captions
-    backdrop_h = int(h*0.18)
+    # make backdrop slimmer so it doesn't cover too much of the background
+    backdrop_h = int(h*0.13)
     mask = Image.new("L", (w, backdrop_h), 0)
     ImageDraw.Draw(mask).rectangle([0,0,w,backdrop_h], fill=160)
-    backdrop = Image.new("RGBA", (w, backdrop_h), (12,12,12,180)).filter(ImageFilter.GaussianBlur(8))
-    img.alpha_composite(backdrop, (0, int(h*0.64)), mask)
+    # reduce backdrop opacity to make background more visible behind captions
+    backdrop = Image.new("RGBA", (w, backdrop_h), (12,12,12,120)).filter(ImageFilter.GaussianBlur(6))
+    img.paste(backdrop, (0, int(h*0.66)), mask)
 
-    y = int(h*0.70)
+    # position captions slightly higher
+    y = int(h*0.68)
     for line in lines:
         bbox = draw.textbbox((0,0), line, font=font)
         line_w = bbox[2]-bbox[0]

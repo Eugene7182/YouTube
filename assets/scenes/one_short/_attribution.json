@@ -1,0 +1,13 @@
+{
+  "script": "data\\one_short.json",
+  "seeds": [
+    "bridge",
+    "back",
+    "beams",
+    "bridges",
+    "clinton",
+    "coin"
+  ],
+  "items": [],
+  "note": "Stock only; Pexels/Pixabay/Wikimedia licenses logged."
+}

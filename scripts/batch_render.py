@@ -17,7 +17,7 @@ def main():
             line = line.strip()
             if not line: continue
             j = json.loads(line)
-            base = f\"{idx:02d}_\" + j['title'].strip().replace(' ','_')[:40]
+            base = f"{idx:02d}_" + j["title"].strip().replace(" ", "_")[:40]
             script_path = os.path.join(args.outdir, base + ".json")
             wav_path = os.path.join(args.outdir, base + ".wav")
             mp4_path = os.path.join(args.outdir, base + ".mp4")
