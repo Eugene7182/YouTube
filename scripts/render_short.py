@@ -1,10 +1,11 @@
-
 import argparse, json, os, subprocess, numpy as np
 from moviepy.editor import ImageClip, AudioFileClip, CompositeVideoClip, vfx
 from PIL import Image, ImageDraw, ImageFont
 from utils_textimg import render_text_frame
 
 W, H = 1080, 1920
+# Audio polish chain applied via FFmpeg
+AUDIO_POLISH = "deesser=f=6500:t=0.8,acompressor=threshold=-14dB:ratio=3:attack=10:release=120,highpass=f=80,loudnorm=I=-14:TP=-1:LRA=11"
 
 def ken_burns(bg_path, dur, zoom=0.08):
     img = Image.open(bg_path).convert("RGB").resize((W, H))
@@ -47,12 +48,12 @@ def build_video(script_json, voice_wav, bg_path, music_path, out_mp4, brand_text
                          bitrate=None, preset="slow", ffmpeg_params=["-pix_fmt","yuv420p","-crf","18"])
 
     # loudness norm and optional music bed
-    cmd = ["ffmpeg","-y","-i", tmp, "-af","loudnorm=I=-14:TP=-1:LRA=11",
+    cmd = ["ffmpeg","-y","-i", tmp, "-af", AUDIO_POLISH,
            "-c:v","libx264","-preset","slow","-crf","18","-pix_fmt","yuv420p", out_mp4]
     if music_path and os.path.exists(music_path):
         cmd = ["ffmpeg","-y","-i", tmp, "-stream_loop","-1","-i", music_path,
                "-filter_complex","[1:a]volume=0.12,apad[a2];[0:a][a2]amix=inputs=2:normalize=0[a]",
-               "-map","0:v","-map","[a]","-af","loudnorm=I=-14:TP=-1:LRA=11",
+               "-map","0:v","-map","[a]","-af", AUDIO_POLISH,
                "-c:v","libx264","-preset","slow","-crf","18","-pix_fmt","yuv420p", out_mp4]
     subprocess.check_call(cmd); os.remove(tmp)
 
@@ -65,3 +66,4 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     build_video(args.script, args.voice, args.bg, args.music, args.out)
+
