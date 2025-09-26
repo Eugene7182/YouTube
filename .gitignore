@@ -1,15 +1,18 @@
 # Python
+.venv/
 __pycache__/
 *.pyc
-.venv/
-env/
+
+# Build artifacts
+build/
+out/
+*.mp4
+*.wav
+
+# Assets that shouldn't go public
+assets/music/
+assets/sfx/
+assets/fonts/
+
 # Local config
 .env
-*.env
-secrets/
-# OAuth secrets/tokens (never commit)
-client_secret*.json
-client_secret.json
-token.json
-# OS junk
-.DS_Store
