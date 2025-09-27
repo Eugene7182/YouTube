@@ -16,3 +16,4 @@ assets/fonts/
 
 # Local config
 .env
+secrets/

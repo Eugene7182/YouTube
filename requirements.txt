@@ -1,6 +1,6 @@
 moviepy==1.0.3
 Pillow==10.4.0
-numpy==1.26.4
+numpy==2.1.1
 python-dotenv==1.0.1
 pydub==0.25.1
 rich==13.7.1

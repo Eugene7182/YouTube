@@ -149,7 +149,7 @@ def run_one(item, voice_path, outdir, want_assets=10, want_videos=3, bg_scenes=N
         "--script_json", str(script_json),
         "--voice", str(voice_wav),
         "--scenes_dir", str(scenes_dir),
-        "--out", str(out_mp4)] + (['--music', music] if music else []))
+        "--out", str(out_mp4)] + (['--music', music] if music else []) + (['--fast'] if os.getenv('FAST_RENDER','') or '--fast' in sys.argv else []))
 
     # 5) thumbnail (кадр 0 с тайтлом)
     try:
@@ -227,6 +227,7 @@ if __name__ == "__main__":
     ap.add_argument("--want_videos", type=int, default=3)
     ap.add_argument("--music", default=None)
     ap.add_argument("--no_script_gen", action="store_true", help="do not call Ollama")
+    ap.add_argument("--fast", action="store_true", help="use fast single-image ffmpeg render for testing")
     ap.add_argument("--upload", action="store_true", help="upload to YouTube private (needs creds)")
     args = ap.parse_args()
 

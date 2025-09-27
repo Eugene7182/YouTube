@@ -92,7 +92,7 @@ def allocate_durations(lines, voice_dur):
     k = voice_dur / sum(raw)
     return [r*k for r in raw]
 
-def build_video(script_json, voice_wav, scenes_dir, out_mp4, music_path=None, brand_text="Dark & Strange"):
+def build_video(script_json, voice_wav, scenes_dir, out_mp4, music_path=None, brand_text="Dark & Strange", fast=False):
     title, lines = load_script(script_json)
     a_voice = AudioFileClip(voice_wav); voice_dur = a_voice.duration
     exts = {'.jpg','.jpeg','.png','.mp4','.mov','.mkv','.webm','.m4v'}
@@ -103,6 +103,20 @@ def build_video(script_json, voice_wav, scenes_dir, out_mp4, music_path=None, br
     for text, path, dur in zip(lines, files*(len(lines)//len(files)+1), durs):
         comp = CompositeVideoClip([scene_clip(path, dur), txt_clip_for(text, dur)], size=(W,H)).set_duration(dur)
         clips.append(comp)
+    # If fast mode is requested, bypass the MoviePy composition and create a deterministic
+    # single-image video using ffmpeg (loop first scene and mux voice). This is much faster
+    # and useful for headless/test runs.
+    if fast:
+        first = files[0]
+        ffmpeg = "ffmpeg"
+        # ensure audio sample rate and video properties
+        cmd = [ffmpeg, "-y", "-loop", "1", "-i", str(first), "-i", str(a_voice.filename),
+               "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", QUALITY["PIX"], "-r", str(QUALITY["FPS"]),
+               "-crf", QUALITY["CRF"], "-preset", QUALITY["PRESET"], "-c:a", "aac", "-ar", "48000", "-b:a", "192k",
+               "-shortest", str(out_mp4)]
+        subprocess.check_call(cmd)
+        return
+
     video = concatenate_videoclips(clips, method="compose")
     wm = txt_clip_for(brand_text, video.duration, y_frac=0.92).fx(vfx.colorx, 0.85)
     final = CompositeVideoClip([video, wm], size=(W,H)).set_audio(a_voice)

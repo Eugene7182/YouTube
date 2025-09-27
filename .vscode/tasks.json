@@ -1,109 +1,232 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Render one",
-      "type": "shell",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": [
-        "scripts/render_short.py",
-        "--script", "${input:renderScriptJson}",
-        "--voice", "${input:renderVoiceWav}",
-        "--bg", "${input:renderBackground}",
-        "--music", "${input:renderMusic}",
-        "--out", "${input:renderOutput}"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Batch render",
-      "type": "shell",
-      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-      "args": [
-        "scripts/batch_render.py",
-        "--jsonl", "${input:batchJsonl}",
-        "--voice", "${input:batchVoice}",
-        "--bg", "${input:batchBackground}",
-        "--music", "${input:batchMusic}",
-        "--outdir", "${input:batchOutdir}"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    }
-  ],
-  "inputs": [
-    {
-      "id": "renderScriptJson",
-      "type": "promptString",
-      "description": "Path to the script JSON",
-      "default": "data/one_short.json"
-    },
-    {
-      "id": "renderVoiceWav",
-      "type": "promptString",
-      "description": "Narration WAV path",
-      "default": "build/voice.wav"
-    },
-    {
-      "id": "renderBackground",
-      "type": "promptString",
-      "description": "Background image path",
-      "default": "assets/bg/dark_texture_01.jpg"
-    },
-    {
-      "id": "renderMusic",
-      "type": "promptString",
-      "description": "Optional music bed (leave blank for none)",
-      "default": ""
-    },
-    {
-      "id": "renderOutput",
-      "type": "promptString",
-      "description": "Output MP4 path",
-      "default": "build/test.mp4"
-    },
-    {
-      "id": "batchJsonl",
-      "type": "promptString",
-      "description": "JSONL file with scripts",
-      "default": "data/batch.jsonl"
-    },
-    {
-      "id": "batchVoice",
-      "type": "promptString",
-      "description": "Voice model or WAV (depends on pipeline)",
-      "default": "build/voice.wav"
-    },
-    {
-      "id": "batchBackground",
-      "type": "promptString",
-      "description": "Background image path",
-      "default": "assets/bg/dark_texture_01.jpg"
-    },
-    {
-      "id": "batchMusic",
-      "type": "promptString",
-      "description": "Optional music bed (leave blank for none)",
-      "default": ""
-    },
-    {
-      "id": "batchOutdir",
-      "type": "promptString",
-      "description": "Output directory for renders",
-      "default": "build/batch"
-    }
-  ]
+    "version":  "2.0.0",
+    "tasks":  [
+                  {
+                      "label":  "FFmpeg PATH (session)",
+                      "type":  "shell",
+                      "command":  "powershell",
+                      "args":  [
+                                   "-NoProfile",
+                                   "-ExecutionPolicy",
+                                   "Bypass",
+                                   "-File",
+                                   ".\\\\scripts\\\\ffmpeg_path.ps1"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  },
+                  {
+                      "label":  "Short: TTS (Piper)",
+                      "type":  "shell",
+                      "command":  "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe",
+                      "args":  [
+                                   "scripts/tts_piper.py",
+                                   "--script_json",
+                                   "data/one_short.json",
+                                   "--voice",
+                                   "assets/voices/en_US-amy-medium.onnx",
+                                   "--out",
+                                   "build/voice.wav"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  },
+                  {
+                      "label":  "Short: Fetch BG",
+                      "type":  "shell",
+                      "command":  "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe",
+                      "args":  [
+                                   "scripts/fetch_asset.py",
+                                   "--query",
+                                   "misty forest night",
+                                   "--provider",
+                                   "pexels,pixabay",
+                                   "--orientation",
+                                   "vertical",
+                                   "--min_width",
+                                   "1080",
+                                   "--min_height",
+                                   "1920",
+                                   "--safesearch",
+                                   "true",
+                                   "--kind",
+                                   "photo",
+                                   "--count",
+                                   "1",
+                                   "--out",
+                                   "assets/bg/auto_bg.jpg",
+                                   "--verbose"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  },
+                  {
+                      "label":  "Short: Render 60fps CRF18",
+                      "type":  "shell",
+                      "command":  "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe",
+                      "args":  [
+                                   "scripts/render_short.py",
+                                   "--script",
+                                   "data/one_short.json",
+                                   "--voice",
+                                   "build/voice.wav",
+                                   "--bg",
+                                   "assets/bg/auto_bg.jpg",
+                                   "--out",
+                                   "build/short_test.mp4"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  },
+                  {
+                      "label":  "Render one",
+                      "type":  "shell",
+                      "command":  "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe",
+                      "args":  [
+                                   "scripts/render_short.py",
+                                   "--script",
+                                   "${input:renderScriptJson}",
+                                   "--voice",
+                                   "${input:renderVoiceWav}",
+                                   "--bg",
+                                   "${input:renderBackground}",
+                                   "--music",
+                                   "${input:renderMusic}",
+                                   "--out",
+                                   "${input:renderOutput}"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  },
+                  {
+                      "label":  "Batch render",
+                      "type":  "shell",
+                      "command":  "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe",
+                      "args":  [
+                                   "scripts/batch_render.py",
+                                   "--jsonl",
+                                   "${input:batchJsonl}",
+                                   "--voice",
+                                   "${input:batchVoice}",
+                                   "--bg",
+                                   "${input:batchBackground}",
+                                   "--music",
+                                   "${input:batchMusic}",
+                                   "--outdir",
+                                   "${input:batchOutdir}"
+                               ],
+                      "options":  {
+                                      "cwd":  "${workspaceFolder}"
+                                  },
+                      "problemMatcher":  [
+
+                                         ],
+                      "presentation":  {
+                                           "reveal":  "always",
+                                           "panel":  "dedicated"
+                                       }
+                  }
+              ],
+    "inputs":  [
+                   {
+                       "id":  "renderScriptJson",
+                       "type":  "promptString",
+                       "description":  "Path to the script JSON",
+                       "default":  "data/one_short.json"
+                   },
+                   {
+                       "id":  "renderVoiceWav",
+                       "type":  "promptString",
+                       "description":  "Narration WAV path",
+                       "default":  "build/voice.wav"
+                   },
+                   {
+                       "id":  "renderBackground",
+                       "type":  "promptString",
+                       "description":  "Background image path",
+                       "default":  "assets/bg/dark_texture_01.jpg"
+                   },
+                   {
+                       "id":  "renderMusic",
+                       "type":  "promptString",
+                       "description":  "Optional music bed (leave blank for none)",
+                       "default":  ""
+                   },
+                   {
+                       "id":  "renderOutput",
+                       "type":  "promptString",
+                       "description":  "Output MP4 path",
+                       "default":  "build/test.mp4"
+                   },
+                   {
+                       "id":  "batchJsonl",
+                       "type":  "promptString",
+                       "description":  "JSONL file with scripts",
+                       "default":  "data/batch.jsonl"
+                   },
+                   {
+                       "id":  "batchVoice",
+                       "type":  "promptString",
+                       "description":  "Voice model or WAV (depends on pipeline)",
+                       "default":  "build/voice.wav"
+                   },
+                   {
+                       "id":  "batchBackground",
+                       "type":  "promptString",
+                       "description":  "Background image path",
+                       "default":  "assets/bg/dark_texture_01.jpg"
+                   },
+                   {
+                       "id":  "batchMusic",
+                       "type":  "promptString",
+                       "description":  "Optional music bed (leave blank for none)",
+                       "default":  ""
+                   },
+                   {
+                       "id":  "batchOutdir",
+                       "type":  "promptString",
+                       "description":  "Output directory for renders",
+                       "default":  "build/batch"
+                   }
+               ]
 }
